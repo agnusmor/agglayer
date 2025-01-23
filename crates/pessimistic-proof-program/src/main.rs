@@ -1,5 +1,5 @@
 #![no_main]
-ziskos::entrypoint!(main);
+sp1_zkvm::entrypoint!(main);
 
 use bincode::Options;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,6 @@ use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader,
     local_exit_tree::hasher::Keccak256Hasher
 };
-use ziskos::{read_input, set_output};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 struct PessimisticProofInput {
@@ -19,8 +18,8 @@ struct PessimisticProofInput {
 }
 
 pub fn main() {
-    // Get the input slice from ziskos
-    let input  = read_input();
+    // Get the input slice from sp1
+    let input = sp1_zkvm::io::read_vec();
 
     let pp_input: PessimisticProofInput = bincode::deserialize(&input).unwrap();
 
@@ -30,16 +29,6 @@ pub fn main() {
          .serialize(&outputs)
          .unwrap();    
 
-    // Set the output values in ziskos
-    for (index, chunk) in pp_inputs.chunks(4).enumerate() {
-        let value = if chunk.len() == 4 {
-            u32::from_le_bytes(chunk.try_into().unwrap())
-        } else {
-            // Handle cases where the chunk is not 4 bytes (e.g., if the Vec length is not divisible by 4)
-            let mut padded = [0u8; 4];
-            padded[..chunk.len()].copy_from_slice(chunk);
-            u32::from_le_bytes(padded)
-        };
-        set_output(index, value);
-    }        
+    // Set the output values in sp1
+    sp1_zkvm::io::commit_slice(&pp_inputs);        
 }

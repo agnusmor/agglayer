@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::Instant};
 use agglayer_types::{Certificate, U256};
 use clap::Parser;
 use pessimistic_proof::{
-    bridge_exit::{NetworkId, TokenInfo}, LocalNetworkState, PessimisticProofOutput
+    bridge_exit::{NetworkId, TokenInfo}, PessimisticProofOutput
 };
 use pessimistic_proof_test_suite::{
     runner::Runner,
@@ -55,12 +55,6 @@ fn get_events(n: usize, path: Option<PathBuf>) -> Vec<(TokenInfo, U256)> {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-struct PessimisticProofInput {
-    state: LocalNetworkState,
-    batch_header: MultiBatchHeader,
-}
-
 pub fn main() {
     sp1_sdk::utils::setup_logger();
 
@@ -94,54 +88,45 @@ pub fn main() {
         imported_bridge_exits.len()
     );
 
-    let zisk_input = PessimisticProofInput {
-        state: old_state.clone().into(),
-        batch_header: multi_batch_header.clone(),
+    let start = Instant::now();
+    let (proof, vk, new_roots) = Runner::new()
+        .generate_plonk_proof(&old_state.into(), &multi_batch_header)
+        .expect("proving failed");
+    let duration = start.elapsed();
+    info!(
+        "Successfully generated the plonk proof with a latency of {:?}",
+        duration
+    );
+
+    let vkey = vk.bytes32().to_string();
+    info!("vkey: {}", vkey);
+
+    let fixture = PessimisticProofFixture {
+        certificate,
+        pp_inputs: new_roots.into(),
+        signer: state.get_signer(),
+        vkey: vkey.clone(),
+        public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
+        proof: format!("0x{}", hex::encode(proof.bytes())),
     };
 
-    let mut pp_file = std::fs::File::create("pp_input.bin").unwrap();
-    bincode::serialize_into(&mut pp_file, &zisk_input).unwrap();    
-
-    info!("pp_input.bin created");
-    // let start = Instant::now();
-    // let (proof, vk, new_roots) = Runner::new()
-    //     .generate_plonk_proof(&old_state.into(), &multi_batch_header)
-    //     .expect("proving failed");
-    // let duration = start.elapsed();
-    // info!(
-    //     "Successfully generated the plonk proof with a latency of {:?}",
-    //     duration
-    // );
-
-    // let vkey = vk.bytes32().to_string();
-    // info!("vkey: {}", vkey);
-
-    // let fixture = PessimisticProofFixture {
-    //     certificate,
-    //     pp_inputs: new_roots.into(),
-    //     signer: state.get_signer(),
-    //     vkey: vkey.clone(),
-    //     public_values: format!("0x{}", hex::encode(proof.public_values.as_slice())),
-    //     proof: format!("0x{}", hex::encode(proof.bytes())),
-    // };
-
-    // if let Some(proof_dir) = args.proof_dir {
-    //     // Save the plonk proof to a json file.
-    //     let proof_path = proof_dir.join(format!(
-    //         "{}-exits-v{}-{}.json",
-    //         args.n_exits,
-    //         &vkey[..8],
-    //         Uuid::new_v4()
-    //     ));
-    //     if let Err(e) = std::fs::create_dir_all(&proof_dir) {
-    //         warn!("Failed to create directory: {e}");
-    //     }
-    //     info!("Writing the proof to {:?}", proof_path);
-    //     std::fs::write(proof_path, serde_json::to_string_pretty(&fixture).unwrap())
-    //         .expect("failed to write fixture");
-    // } else {
-    //     info!("Proof: {:?}", fixture);
-    // }
+    if let Some(proof_dir) = args.proof_dir {
+        // Save the plonk proof to a json file.
+        let proof_path = proof_dir.join(format!(
+            "{}-exits-v{}-{}.json",
+            args.n_exits,
+            &vkey[..8],
+            Uuid::new_v4()
+        ));
+        if let Err(e) = std::fs::create_dir_all(&proof_dir) {
+            warn!("Failed to create directory: {e}");
+        }
+        info!("Writing the proof to {:?}", proof_path);
+        std::fs::write(proof_path, serde_json::to_string_pretty(&fixture).unwrap())
+            .expect("failed to write fixture");
+    } else {
+        info!("Proof: {:?}", fixture);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

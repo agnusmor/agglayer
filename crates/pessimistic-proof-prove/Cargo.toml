@@ -1,0 +1,12 @@
+[package]
+name = "pessimistic-proof-prove"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ppprove-sp1"
+path = "src/main.rs"
+
+[dependencies]
+pessimistic-proof = { path = "../pessimistic-proof" }
+sp1-sdk.workspace = true
