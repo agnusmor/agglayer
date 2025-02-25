@@ -1,19 +1,14 @@
-use std::{path::PathBuf, time::Instant};
+use std::path::PathBuf;
 
 use agglayer_types::{Certificate, U256};
 use clap::Parser;
 use pessimistic_proof::{
     bridge_exit::{NetworkId, TokenInfo}, LocalNetworkState, PessimisticProofOutput
 };
-use pessimistic_proof_test_suite::{
-    runner::Runner,
-    sample_data::{self as data},
-};
+use pessimistic_proof_test_suite::sample_data::{self as data};
 use reth_primitives::Address;
 use serde::{Deserialize, Serialize};
-use sp1_sdk::HashableKey;
-use tracing::{info, warn};
-use uuid::Uuid;
+use tracing::info;
 pub type Hasher = pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
 pub type MultiBatchHeader = pessimistic_proof::multi_batch_header::MultiBatchHeader<Hasher>;
 
@@ -99,7 +94,9 @@ pub fn main() {
         batch_header: multi_batch_header.clone(),
     };
 
-    let mut pp_file = std::fs::File::create("pp_input.bin").unwrap();
+    std::fs::create_dir("inputs").ok();
+
+    let mut pp_file = std::fs::File::create(format!("inputs/pp_input_{}_{}.bin", args.n_imported_exits, args.n_exits)).unwrap();
     bincode::serialize_into(&mut pp_file, &zisk_input).unwrap();    
 
     info!("pp_input.bin created");
